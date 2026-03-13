@@ -5,6 +5,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="$SCRIPT_DIR/build"
 APPDIR="$SCRIPT_DIR/AppDir"
+QT6_PLUGINS="/usr/lib/qt6/plugins"
 
 # Ensure build exists
 if [ ! -f "$BUILD_DIR/haiclaude" ]; then
@@ -36,6 +37,7 @@ rm -rf "$APPDIR"
 mkdir -p "$APPDIR/usr/bin"
 mkdir -p "$APPDIR/usr/share/applications"
 mkdir -p "$APPDIR/usr/share/icons/hicolor/256x256/apps"
+mkdir -p "$APPDIR/usr/plugins/platformthemes"
 
 # Copy executable
 cp "$BUILD_DIR/haiclaude" "$APPDIR/usr/bin/"
@@ -57,6 +59,49 @@ export NO_STRIP=1  # Disable stripping (avoids .relr.dyn section issues on newer
 export QMAKE="/usr/bin/qmake6"  # Use Qt6 qmake
 cd "$SCRIPT_DIR"
 "$LINUXDEPLOY" --appdir "$APPDIR" --plugin qt --output appimage
+
+# Bundle additional platform theme plugins for system theming
+echo "Adding platform theme plugins..."
+mkdir -p "$APPDIR/usr/plugins/platformthemes"
+if [ -f "$QT6_PLUGINS/platformthemes/libqgtk3.so" ]; then
+    cp "$QT6_PLUGINS/platformthemes/libqgtk3.so" "$APPDIR/usr/plugins/platformthemes/"
+fi
+
+# Create wrapper script for theme support
+cat > "$APPDIR/AppRun" << 'APPRUN'
+#!/bin/bash
+# AppRun wrapper with theme support
+APPDIR="$(dirname "$(readlink -f "$0")")"
+export QT_PLUGIN_PATH="$APPDIR/usr/plugins:$QT_PLUGIN_PATH"
+
+# Auto-detect platform theme if not set
+if [ -z "$QT_QPA_PLATFORMTHEME" ]; then
+    if [ -n "$XDG_CURRENT_DESKTOP" ]; then
+        case "$XDG_CURRENT_DESKTOP" in
+            *GNOME*|*gnome*|*Ubuntu*|*Pop*)
+                export QT_QPA_PLATFORMTHEME=gtk3
+                ;;
+            *KDE*|*kde*|*Plasma*)
+                export QT_QPA_PLATFORMTHEME=kde
+                ;;
+            *)
+                # Try gtk3 as fallback for most desktops
+                export QT_QPA_PLATFORMTHEME=gtk3
+                ;;
+        esac
+    else
+        export QT_QPA_PLATFORMTHEME=gtk3
+    fi
+fi
+
+exec "$APPDIR/usr/bin/haiclaude" "$@"
+APPRUN
+chmod +x "$APPDIR/AppRun"
+
+# Rebuild AppImage with theme support
+echo "Rebuilding AppImage with theme support..."
+rm -f "$SCRIPT_DIR/HaiClaude-x86_64.AppImage"
+"$LINUXDEPLOY" --appdir "$APPDIR" --output appimage
 
 echo ""
 echo "AppImage created: $SCRIPT_DIR/HaiClaude-x86_64.AppImage"
