@@ -67,11 +67,14 @@ if [ -f "$QT6_PLUGINS/platformthemes/libqgtk3.so" ]; then
     cp "$QT6_PLUGINS/platformthemes/libqgtk3.so" "$APPDIR/usr/plugins/platformthemes/"
 fi
 
+# Rename binary so wrapper can call it
+mv "$APPDIR/usr/bin/haiclaude" "$APPDIR/usr/bin/haiclaude.bin"
+
 # Create wrapper script for theme support
-cat > "$APPDIR/AppRun" << 'APPRUN'
+cat > "$APPDIR/usr/bin/haiclaude" << 'WRAPPER'
 #!/bin/bash
-# AppRun wrapper with theme support
-APPDIR="$(dirname "$(readlink -f "$0")")"
+# Wrapper with theme support
+APPDIR="$(dirname "$(dirname "$(readlink -f "$0")")")"
 export QT_PLUGIN_PATH="$APPDIR/usr/plugins:$QT_PLUGIN_PATH"
 
 # Auto-detect platform theme if not set
@@ -94,9 +97,9 @@ if [ -z "$QT_QPA_PLATFORMTHEME" ]; then
     fi
 fi
 
-exec "$APPDIR/usr/bin/haiclaude" "$@"
-APPRUN
-chmod +x "$APPDIR/AppRun"
+exec "$APPDIR/usr/bin/haiclaude.bin" "$@"
+WRAPPER
+chmod +x "$APPDIR/usr/bin/haiclaude"
 
 # Rebuild AppImage with theme support
 echo "Rebuilding AppImage with theme support..."
