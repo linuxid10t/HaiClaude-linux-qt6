@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=HaiClaude
+Comment=Launcher for Claude Code CLI
+Exec=haiclaude
+Icon=haiclaude-icon
+Categories=Development;Utility;
+Terminal=false

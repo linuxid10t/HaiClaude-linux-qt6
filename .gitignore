@@ -24,3 +24,11 @@ CMakeCache.txt
 CMakeFiles/
 cmake_install.cmake
 Makefile
+
+# AppImage build artifacts
+AppDir/
+linuxdeploy*.AppImage
+HaiClaude-x86_64.AppImage
+.qt/
+haiclaude_autogen/
+*.qrc.depends

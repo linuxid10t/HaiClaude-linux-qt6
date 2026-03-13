@@ -37,6 +37,16 @@ sudo cmake --install build
 
 Installs to `/usr/local/bin/haiclaude` by default.
 
+## Build AppImage
+
+To create a portable AppImage:
+
+```sh
+./build-appimage.sh
+```
+
+This downloads linuxdeploy and creates `HaiClaude-x86_64.AppImage`.
+
 ## Claude Code Setup
 
 Install Claude Code via npm:
