@@ -30,6 +30,7 @@ Executable outputs to `build/haiclaude`.
 - Model selection (Opus/Sonnet/Haiku) - only visible in Cloud mode
 - Working directory picker
 - API settings (URL, key, model overrides) - only visible in API mode
+- Profile management (save/load API configurations) - only visible in API mode
 - Settings persistence via `QSettings` (stored under `DavidMasson/HaiClaude`)
 - Terminal detection and command execution
 
@@ -46,6 +47,42 @@ Executable outputs to `build/haiclaude`.
 - All user input is shell-escaped via `shellEscape()` (wraps in single quotes, escapes internal quotes)
 - API key storage is opt-in via "Remember key" checkbox
 - In API mode, existing credentials are backed up and restored via a trap on EXIT
+
+### Profile Management
+
+**Feature**: Save and load complete API mode configurations as named profiles.
+
+**How it works**:
+- Profiles are stored in QSettings under the `DavidMasson/HaiClaude` organization
+- Each profile stores: URL, API key, "Remember key" preference, and all model override settings
+- Profile names are validated (no empty names, no special characters that break INI keys)
+
+**Profile keys**:
+- `apiProfiles` - QStringList of profile names
+- `apiProfile_<name>_url` - API endpoint URL
+- `apiProfile_<name>_key` - API key
+- `apiProfile_<name>_saveKey` - Whether to remember key
+- `apiProfile_<name>_currentModelCheck/Model` - Current model override
+- `apiProfile_<name>_opusModelCheck/Model` - Opus model override
+- `apiProfile_<name>_sonnetModelCheck/Model` - Sonnet model override
+- `apiProfile_<name>_haikuModelCheck/Model` - Haiku model override
+- `activeProfile` - Currently active profile name
+
+**UI Components**:
+- `fProfileComboBox` - Dropdown to select saved profiles
+- `fProfileListWidget` - List showing all saved profiles
+- `fSaveProfileButton` - Save current settings as new profile
+- `fDeleteProfileButton` - Delete selected profile
+- `fProfileNameEdit` - Input field for naming new profiles
+
+**User Flow**:
+1. Enter API settings in the UI
+2. Type a profile name in the profile name input field
+3. Click "Save Profile" to save current settings
+4. Profile appears in both the combo box and list widget
+5. Select a profile from the combo box to load its settings
+6. Select a profile from the list widget and click "Delete" to remove it
+7. Active profile is saved and restored on app restart
 
 ## Conventions
 

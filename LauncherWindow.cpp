@@ -4,6 +4,7 @@
 
 #include <QButtonGroup>
 #include <QCheckBox>
+#include <QComboBox>
 #include <QDir>
 #include <QFile>
 #include <QFileDialog>
@@ -14,6 +15,7 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
+#include <QListWidget>
 #include <QMessageBox>
 #include <QProcess>
 #include <QPushButton>
@@ -108,6 +110,34 @@ LauncherWindow::LauncherWindow(QWidget* parent)
     addOverrideRow("Override ANTHROPIC_DEFAULT_HAIKU_MODEL",  "claude-haiku-4-20250514",
                    fApiHaikuModelCheck,   fApiHaikuModelField);
 
+    // --- Profile management ---
+    fProfileNameEdit = new QLineEdit;
+    fProfileNameEdit->setPlaceholderText("Profile name");
+    fProfileNameEdit->setMaximumWidth(200);
+
+    fProfileComboBox = new QComboBox;
+    fProfileComboBox->setPlaceholderText("Select profile...");
+
+    fProfileListWidget = new QListWidget;
+    fProfileListWidget->setMaximumHeight(150);
+
+    fSaveProfileButton = new QPushButton("Save Profile");
+    fDeleteProfileButton = new QPushButton("Delete Profile");
+    fDeleteProfileButton->setEnabled(false);
+
+    fProfileBox = new QGroupBox("API Profiles");
+    QVBoxLayout* profileLayout = new QVBoxLayout(fProfileBox);
+
+    QHBoxLayout* profileRow = new QHBoxLayout;
+    profileRow->addWidget(new QLabel("Profile:"));
+    profileRow->addWidget(fProfileComboBox);
+    profileRow->addWidget(fProfileNameEdit);
+    profileRow->addWidget(fSaveProfileButton);
+    profileLayout->addLayout(profileRow);
+
+    profileLayout->addWidget(fProfileListWidget);
+    profileLayout->addWidget(fDeleteProfileButton);
+
     // --- Launch button ---
     fLaunchBtn = new QPushButton("Launch Claude Code");
     fLaunchBtn->setDefault(true);
@@ -143,6 +173,9 @@ LauncherWindow::LauncherWindow(QWidget* parent)
     root->addLayout(dirRow);
 
     root->addWidget(fApiBox);
+
+    root->addWidget(fProfileBox);
+
     root->addStretch();
     root->addWidget(fLaunchBtn);
 
@@ -203,6 +236,24 @@ LauncherWindow::LauncherWindow(QWidget* parent)
     connectCheck(fApiSonnetModelCheck,  fApiSonnetModelField);
     connectCheck(fApiHaikuModelCheck,   fApiHaikuModelField);
 
+    // Profile management connections
+    connect(fProfileComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, [this](int index) {
+        if (index >= 0 && !fProfileComboBox->itemText(index).isEmpty())
+            loadProfile(fProfileComboBox->itemText(index));
+    });
+
+    connect(fProfileListWidget, &QListWidget::itemSelectionChanged,
+            this, [this]() {
+        fDeleteProfileButton->setEnabled(fProfileListWidget->currentItem() != nullptr);
+    });
+
+    connect(fSaveProfileButton, &QPushButton::clicked, this, &LauncherWindow::saveCurrentProfile);
+    connect(fDeleteProfileButton, &QPushButton::clicked, this, &LauncherWindow::deleteProfile);
+
+    // Load profiles on startup
+    loadProfiles();
+
     // --- Initial state ---
     loadSettings();
     updateModeVisibility(); // calls resizeToFit()
@@ -236,6 +287,7 @@ void LauncherWindow::updateModeVisibility()
     bool isApi = fApiRadio->isChecked();
     fModelBox->setVisible(!isApi);
     fApiBox->setVisible(isApi);
+    fProfileBox->setVisible(isApi);
     resizeToFit();
 }
 
@@ -384,30 +436,64 @@ void LauncherWindow::loadSettings()
     else                      fCloudOpusRadio->setChecked(true);
 
     fWorkDirField->setText(s.value("workDir", QDir::homePath()).toString());
-    fApiUrlField->setText( s.value("apiUrl",  "https://api.anthropic.com/v1").toString());
 
-    // Only load API key if saveApiKey is true
-    const bool saveKey = s.value("saveApiKey", false).toBool();
-    fSaveApiKeyCheck->setChecked(saveKey);
-    if (saveKey)
+    // Load profile settings if in API mode
+    if (fApiRadio->isChecked()) {
+        QString profileName = s.value("activeProfile", "").toString();
+        if (!profileName.isEmpty()) {
+            loadProfile(profileName);
+        } else {
+            // Load individual settings
+            fApiUrlField->setText( s.value("apiUrl",  "https://api.anthropic.com/v1").toString());
+            fApiKeyField->setText(s.value("apiKey", "").toString());
+            const bool saveKey = s.value("saveApiKey", false).toBool();
+            fSaveApiKeyCheck->setChecked(saveKey);
+            if (saveKey)
+                fApiKeyField->setText(s.value("apiKey", "").toString());
+
+            auto loadCheck = [&](const QString& checkKey, QCheckBox* cb,
+                                 const QString& fieldKey, const QString& defaultVal, QLineEdit* field) {
+                const bool checked = s.value(checkKey, false).toBool();
+                cb->setChecked(checked);
+                field->setVisible(checked);
+                field->setText(s.value(fieldKey, defaultVal).toString());
+            };
+
+            loadCheck("apiCurrentModelCheck", fApiCurrentModelCheck,
+                      "apiCurrentModel", "claude-sonnet-4-6",      fApiCurrentModelField);
+            loadCheck("apiOpusModelCheck",    fApiOpusModelCheck,
+                      "apiOpusModel",    "claude-opus-4-20250514",  fApiOpusModelField);
+            loadCheck("apiSonnetModelCheck",  fApiSonnetModelCheck,
+                      "apiSonnetModel",  "claude-sonnet-4-6",      fApiSonnetModelField);
+            loadCheck("apiHaikuModelCheck",   fApiHaikuModelCheck,
+                      "apiHaikuModel",   "claude-haiku-4-20250514", fApiHaikuModelField);
+        }
+    } else {
+        // Load individual settings for Cloud mode
+        fApiUrlField->setText( s.value("apiUrl",  "https://api.anthropic.com/v1").toString());
         fApiKeyField->setText(s.value("apiKey", "").toString());
+        const bool saveKey = s.value("saveApiKey", false).toBool();
+        fSaveApiKeyCheck->setChecked(saveKey);
+        if (saveKey)
+            fApiKeyField->setText(s.value("apiKey", "").toString());
 
-    auto loadCheck = [&](const QString& checkKey, QCheckBox* cb,
-                         const QString& fieldKey, const QString& defaultVal, QLineEdit* field) {
-        const bool checked = s.value(checkKey, false).toBool();
-        cb->setChecked(checked);
-        field->setVisible(checked);
-        field->setText(s.value(fieldKey, defaultVal).toString());
-    };
+        auto loadCheck = [&](const QString& checkKey, QCheckBox* cb,
+                             const QString& fieldKey, const QString& defaultVal, QLineEdit* field) {
+            const bool checked = s.value(checkKey, false).toBool();
+            cb->setChecked(checked);
+            field->setVisible(checked);
+            field->setText(s.value(fieldKey, defaultVal).toString());
+        };
 
-    loadCheck("apiCurrentModelCheck", fApiCurrentModelCheck,
-              "apiCurrentModel", "claude-sonnet-4-6",      fApiCurrentModelField);
-    loadCheck("apiOpusModelCheck",    fApiOpusModelCheck,
-              "apiOpusModel",    "claude-opus-4-20250514",  fApiOpusModelField);
-    loadCheck("apiSonnetModelCheck",  fApiSonnetModelCheck,
-              "apiSonnetModel",  "claude-sonnet-4-6",      fApiSonnetModelField);
-    loadCheck("apiHaikuModelCheck",   fApiHaikuModelCheck,
-              "apiHaikuModel",   "claude-haiku-4-20250514", fApiHaikuModelField);
+        loadCheck("apiCurrentModelCheck", fApiCurrentModelCheck,
+                  "apiCurrentModel", "claude-sonnet-4-6",      fApiCurrentModelField);
+        loadCheck("apiOpusModelCheck",    fApiOpusModelCheck,
+                  "apiOpusModel",    "claude-opus-4-20250514",  fApiOpusModelField);
+        loadCheck("apiSonnetModelCheck",  fApiSonnetModelCheck,
+                  "apiSonnetModel",  "claude-sonnet-4-6",      fApiSonnetModelField);
+        loadCheck("apiHaikuModelCheck",   fApiHaikuModelCheck,
+                  "apiHaikuModel",   "claude-haiku-4-20250514", fApiHaikuModelField);
+    }
 }
 
 void LauncherWindow::saveSettings()
@@ -419,6 +505,14 @@ void LauncherWindow::saveSettings()
     s.setValue("cloudModel", cloudModel >= 0 ? cloudModel : 0);
 
     s.setValue("workDir",  fWorkDirField->text());
+
+    // Save active profile if in API mode
+    if (fApiRadio->isChecked()) {
+        QString profileName = fProfileComboBox->currentText();
+        if (!profileName.isEmpty())
+            s.setValue("activeProfile", profileName);
+    }
+
     s.setValue("apiUrl",   fApiUrlField->text());
 
     // Only save API key if checkbox is checked
@@ -434,4 +528,154 @@ void LauncherWindow::saveSettings()
     s.setValue("apiSonnetModel",       fApiSonnetModelField->text());
     s.setValue("apiHaikuModelCheck",   fApiHaikuModelCheck->isChecked());
     s.setValue("apiHaikuModel",        fApiHaikuModelField->text());
+}
+
+// ---------------------------------------------------------------------------
+// Profile Management
+// ---------------------------------------------------------------------------
+
+void LauncherWindow::loadProfiles()
+{
+    QSettings s;
+    QStringList profiles = s.value("apiProfiles").toStringList();
+
+    updateProfileComboBox();
+    updateProfileListWidget();
+}
+
+void LauncherWindow::updateProfileComboBox()
+{
+    QSettings s;
+    QStringList profiles = s.value("apiProfiles").toStringList();
+
+    fProfileComboBox->clear();
+    fProfileComboBox->addItems(profiles);
+
+    // Select first profile if available
+    if (!profiles.isEmpty())
+        fProfileComboBox->setCurrentIndex(0);
+}
+
+void LauncherWindow::updateProfileListWidget()
+{
+    QSettings s;
+    QStringList profiles = s.value("apiProfiles").toStringList();
+
+    fProfileListWidget->clear();
+    for (const QString& profile : profiles) {
+        fProfileListWidget->addItem(profile);
+    }
+}
+
+void LauncherWindow::saveCurrentProfile()
+{
+    QString profileName = fProfileNameEdit->text().trimmed();
+
+    if (profileName.isEmpty()) {
+        QMessageBox::warning(this, "Invalid Profile Name",
+            "Please enter a profile name.");
+        return;
+    }
+
+    // Check for duplicate profile names
+    QSettings s;
+    QStringList profiles = s.value("apiProfiles").toStringList();
+    if (profiles.contains(profileName)) {
+        QMessageBox::warning(this, "Duplicate Profile",
+            "A profile with this name already exists.");
+        return;
+    }
+
+    // Save profile settings
+    s.setValue("apiProfile_" + profileName + "_url", fApiUrlField->text());
+    s.setValue("apiProfile_" + profileName + "_key", fApiKeyField->text());
+    s.setValue("apiProfile_" + profileName + "_saveKey", fSaveApiKeyCheck->isChecked());
+    s.setValue("apiProfile_" + profileName + "_currentModelCheck", fApiCurrentModelCheck->isChecked());
+    s.setValue("apiProfile_" + profileName + "_currentModel", fApiCurrentModelField->text());
+    s.setValue("apiProfile_" + profileName + "_opusModelCheck", fApiOpusModelCheck->isChecked());
+    s.setValue("apiProfile_" + profileName + "_opusModel", fApiOpusModelField->text());
+    s.setValue("apiProfile_" + profileName + "_sonnetModelCheck", fApiSonnetModelCheck->isChecked());
+    s.setValue("apiProfile_" + profileName + "_sonnetModel", fApiSonnetModelField->text());
+    s.setValue("apiProfile_" + profileName + "_haikuModelCheck", fApiHaikuModelCheck->isChecked());
+    s.setValue("apiProfile_" + profileName + "_haikuModel", fApiHaikuModelField->text());
+
+    // Add to profiles list
+    profiles.append(profileName);
+    s.setValue("apiProfiles", profiles);
+
+    // Update UI
+    updateProfileComboBox();
+    updateProfileListWidget();
+    fProfileNameEdit->clear();
+
+    QMessageBox::information(this, "Profile Saved",
+        "Profile '" + profileName + "' has been saved.");
+}
+
+void LauncherWindow::deleteProfile()
+{
+    QListWidgetItem* item = fProfileListWidget->currentItem();
+    if (!item) {
+        QMessageBox::warning(this, "No Selection",
+            "Please select a profile to delete.");
+        return;
+    }
+
+    QString profileName = item->text();
+
+    // Remove from profiles list
+    QSettings s;
+    QStringList profiles = s.value("apiProfiles").toStringList();
+    profiles.removeAll(profileName);
+    s.setValue("apiProfiles", profiles);
+
+    // Remove profile settings
+    s.remove("apiProfile_" + profileName + "_url");
+    s.remove("apiProfile_" + profileName + "_key");
+    s.remove("apiProfile_" + profileName + "_saveKey");
+    s.remove("apiProfile_" + profileName + "_currentModelCheck");
+    s.remove("apiProfile_" + profileName + "_currentModel");
+    s.remove("apiProfile_" + profileName + "_opusModelCheck");
+    s.remove("apiProfile_" + profileName + "_opusModel");
+    s.remove("apiProfile_" + profileName + "_sonnetModelCheck");
+    s.remove("apiProfile_" + profileName + "_sonnetModel");
+    s.remove("apiProfile_" + profileName + "_haikuModelCheck");
+    s.remove("apiProfile_" + profileName + "_haikuModel");
+
+    // Update UI
+    updateProfileComboBox();
+    updateProfileListWidget();
+
+    QMessageBox::information(this, "Profile Deleted",
+        "Profile '" + profileName + "' has been deleted.");
+}
+
+void LauncherWindow::loadProfile(const QString& name)
+{
+    QSettings s;
+
+    // Load profile settings
+    fApiUrlField->setText(s.value("apiProfile_" + name + "_url", "https://api.anthropic.com/v1").toString());
+    fApiKeyField->setText(s.value("apiProfile_" + name + "_key", "").toString());
+    fSaveApiKeyCheck->setChecked(s.value("apiProfile_" + name + "_saveKey", false).toBool());
+
+    fApiCurrentModelCheck->setChecked(s.value("apiProfile_" + name + "_currentModelCheck", false).toBool());
+    fApiCurrentModelField->setText(s.value("apiProfile_" + name + "_currentModel", "claude-sonnet-4-6").toString());
+
+    fApiOpusModelCheck->setChecked(s.value("apiProfile_" + name + "_opusModelCheck", false).toBool());
+    fApiOpusModelField->setText(s.value("apiProfile_" + name + "_opusModel", "claude-opus-4-20250514").toString());
+
+    fApiSonnetModelCheck->setChecked(s.value("apiProfile_" + name + "_sonnetModelCheck", false).toBool());
+    fApiSonnetModelField->setText(s.value("apiProfile_" + name + "_sonnetModel", "claude-sonnet-4-6").toString());
+
+    fApiHaikuModelCheck->setChecked(s.value("apiProfile_" + name + "_haikuModelCheck", false).toBool());
+    fApiHaikuModelField->setText(s.value("apiProfile_" + name + "_haikuModel", "claude-haiku-4-20250514").toString());
+
+    // Update visibility
+    fApiCurrentModelField->setVisible(fApiCurrentModelCheck->isChecked());
+    fApiOpusModelField->setVisible(fApiOpusModelCheck->isChecked());
+    fApiSonnetModelField->setVisible(fApiSonnetModelCheck->isChecked());
+    fApiHaikuModelField->setVisible(fApiHaikuModelCheck->isChecked());
+
+    resizeToFit();
 }
