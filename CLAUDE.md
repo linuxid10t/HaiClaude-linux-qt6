@@ -14,6 +14,13 @@ cmake -B build && cmake --build build
 
 Executable outputs to `build/haiclaude`.
 
+## Install / Uninstall
+
+```sh
+sudo make -C build install   # Install to /usr/local/bin/haiclaude
+sudo make -C build uninstall # Remove installed binary
+```
+
 ## Architecture
 
 ### Core Files

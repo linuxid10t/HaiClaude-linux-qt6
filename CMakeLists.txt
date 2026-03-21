@@ -19,3 +19,9 @@ qt_add_executable(haiclaude
 target_link_libraries(haiclaude PRIVATE Qt6::Widgets)
 
 install(TARGETS haiclaude RUNTIME DESTINATION bin)
+
+# Uninstall target
+add_custom_target(uninstall
+    COMMAND xargs rm -f < ${CMAKE_BINARY_DIR}/install_manifest.txt
+    COMMENT "Uninstalling haiclaude..."
+)
