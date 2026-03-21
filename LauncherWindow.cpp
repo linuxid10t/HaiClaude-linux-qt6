@@ -13,6 +13,8 @@
 #include <QGroupBox>
 #include <QGuiApplication>
 #include <QHBoxLayout>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
@@ -110,6 +112,11 @@ LauncherWindow::LauncherWindow(QWidget* parent)
     addOverrideRow("Override ANTHROPIC_DEFAULT_HAIKU_MODEL",  "claude-haiku-4-20250514",
                    fApiHaikuModelCheck,   fApiHaikuModelField);
 
+    fFixAttributionCheck = new QCheckBox("Fix attribution header (for local LLMs)");
+    fFixAttributionCheck->setToolTip("Disables CLAUDE_CODE_ATTRIBUTION_HEADER in settings.json.\n"
+                                      "Required for local LLMs to avoid 90% slower inference.");
+    apiLayout->addRow("", fFixAttributionCheck);
+
     // --- Profile management ---
     fProfileNameEdit = new QLineEdit;
     fProfileNameEdit->setPlaceholderText("Profile name");
@@ -172,6 +179,12 @@ LauncherWindow::LauncherWindow(QWidget* parent)
     dirRow->addWidget(fBrowseBtn);
     root->addLayout(dirRow);
 
+    // YOLO checkbox (visible in both modes)
+    fYoloCheck = new QCheckBox("YOLO mode (skip all permissions)");
+    fYoloCheck->setToolTip("Adds --dangerously-skip-permissions flag.\n"
+                           "WARNING: Claude will execute commands without asking for approval.");
+    root->addWidget(fYoloCheck);
+
     root->addWidget(fApiBox);
 
     root->addWidget(fProfileBox);
@@ -216,6 +229,11 @@ LauncherWindow::LauncherWindow(QWidget* parent)
         }
 
         saveSettings();
+
+        // Apply attribution header fix if in API mode and checkbox is checked
+        if (fApiRadio->isChecked() && fFixAttributionCheck->isChecked())
+            applyAttributionHeaderFix();
+
         QString cmd = buildCommand();
         if (isatty(STDIN_FILENO)) {
             gPendingExec = cmd.toStdString();
@@ -338,6 +356,10 @@ QString LauncherWindow::buildCommand() const
             cmd += " --model " + shellEscape(fApiCurrentModelField->text());
     }
 
+    // Add YOLO flag if checked (applies to both modes)
+    if (fYoloCheck->isChecked())
+        cmd += " --dangerously-skip-permissions";
+
     return cmd;
 }
 
@@ -419,6 +441,43 @@ void LauncherWindow::launchInTerminal(const QString& cmd)
 }
 
 // ---------------------------------------------------------------------------
+// applyAttributionHeaderFix
+// ---------------------------------------------------------------------------
+
+void LauncherWindow::applyAttributionHeaderFix()
+{
+    QString settingsPath = QDir::homePath() + "/.claude/settings.json";
+    QJsonObject root;
+
+    // Read existing settings if file exists
+    QFile file(settingsPath);
+    if (file.exists()) {
+        if (file.open(QIODevice::ReadOnly)) {
+            QByteArray data = file.readAll();
+            file.close();
+            QJsonParseError parseError;
+            QJsonDocument doc = QJsonDocument::fromJson(data, &parseError);
+            if (parseError.error == QJsonParseError::NoError && doc.isObject())
+                root = doc.object();
+        }
+    }
+
+    // Ensure "env" object exists and add the fix
+    QJsonObject env = root.value("env").toObject();
+    env.insert("CLAUDE_CODE_ATTRIBUTION_HEADER", "0");
+    root.insert("env", env);
+
+    // Write back
+    if (!file.open(QIODevice::WriteOnly)) {
+        QMessageBox::warning(this, "Settings Error",
+            "Could not write to ~/.claude/settings.json");
+        return;
+    }
+    file.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
+    file.close();
+}
+
+// ---------------------------------------------------------------------------
 // loadSettings / saveSettings
 // ---------------------------------------------------------------------------
 
@@ -467,6 +526,9 @@ void LauncherWindow::loadSettings()
                       "apiSonnetModel",  "claude-sonnet-4-6",      fApiSonnetModelField);
             loadCheck("apiHaikuModelCheck",   fApiHaikuModelCheck,
                       "apiHaikuModel",   "claude-haiku-4-20250514", fApiHaikuModelField);
+
+            fFixAttributionCheck->setChecked(s.value("fixAttributionHeader", false).toBool());
+            fYoloCheck->setChecked(s.value("yoloMode", false).toBool());
         }
     } else {
         // Load individual settings for Cloud mode
@@ -493,6 +555,9 @@ void LauncherWindow::loadSettings()
                   "apiSonnetModel",  "claude-sonnet-4-6",      fApiSonnetModelField);
         loadCheck("apiHaikuModelCheck",   fApiHaikuModelCheck,
                   "apiHaikuModel",   "claude-haiku-4-20250514", fApiHaikuModelField);
+
+        fFixAttributionCheck->setChecked(s.value("fixAttributionHeader", false).toBool());
+        fYoloCheck->setChecked(s.value("yoloMode", false).toBool());
     }
 }
 
@@ -528,6 +593,8 @@ void LauncherWindow::saveSettings()
     s.setValue("apiSonnetModel",       fApiSonnetModelField->text());
     s.setValue("apiHaikuModelCheck",   fApiHaikuModelCheck->isChecked());
     s.setValue("apiHaikuModel",        fApiHaikuModelField->text());
+    s.setValue("fixAttributionHeader", fFixAttributionCheck->isChecked());
+    s.setValue("yoloMode",             fYoloCheck->isChecked());
 }
 
 // ---------------------------------------------------------------------------
@@ -598,6 +665,7 @@ void LauncherWindow::saveCurrentProfile()
     s.setValue("apiProfile_" + profileName + "_sonnetModel", fApiSonnetModelField->text());
     s.setValue("apiProfile_" + profileName + "_haikuModelCheck", fApiHaikuModelCheck->isChecked());
     s.setValue("apiProfile_" + profileName + "_haikuModel", fApiHaikuModelField->text());
+    s.setValue("apiProfile_" + profileName + "_fixAttribution", fFixAttributionCheck->isChecked());
 
     // Add to profiles list
     profiles.append(profileName);
@@ -641,6 +709,7 @@ void LauncherWindow::deleteProfile()
     s.remove("apiProfile_" + profileName + "_sonnetModel");
     s.remove("apiProfile_" + profileName + "_haikuModelCheck");
     s.remove("apiProfile_" + profileName + "_haikuModel");
+    s.remove("apiProfile_" + profileName + "_fixAttribution");
 
     // Update UI
     updateProfileComboBox();
@@ -670,6 +739,8 @@ void LauncherWindow::loadProfile(const QString& name)
 
     fApiHaikuModelCheck->setChecked(s.value("apiProfile_" + name + "_haikuModelCheck", false).toBool());
     fApiHaikuModelField->setText(s.value("apiProfile_" + name + "_haikuModel", "claude-haiku-4-20250514").toString());
+
+    fFixAttributionCheck->setChecked(s.value("apiProfile_" + name + "_fixAttribution", false).toBool());
 
     // Update visibility
     fApiCurrentModelField->setVisible(fApiCurrentModelCheck->isChecked());

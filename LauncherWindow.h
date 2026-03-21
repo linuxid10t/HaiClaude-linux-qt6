@@ -30,6 +30,7 @@ private:
     QString findClaude() const;
     QString findTerminal() const;
     void launchInTerminal(const QString& cmd);
+    void applyAttributionHeaderFix();
 
     // Profile management
     void loadProfiles();
@@ -65,6 +66,8 @@ private:
     QLineEdit*      fApiSonnetModelField;
     QCheckBox*      fApiHaikuModelCheck;
     QLineEdit*      fApiHaikuModelField;
+    QCheckBox*      fFixAttributionCheck;
+    QCheckBox*      fYoloCheck;
 
     // Profile management
     QComboBox*      fProfileComboBox;

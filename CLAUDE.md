@@ -36,6 +36,7 @@ sudo make -C build uninstall # Remove installed binary
 - Mode selection (Cloud vs API)
 - Model selection (Opus/Sonnet/Haiku) - only visible in Cloud mode
 - Working directory picker
+- YOLO mode checkbox (skip all permissions) - visible in both modes
 - API settings (URL, key, model overrides) - only visible in API mode
 - Profile management (save/load API configurations) - only visible in API mode
 - Settings persistence via `QSettings` (stored under `DavidMasson/HaiClaude`)
@@ -54,6 +55,7 @@ sudo make -C build uninstall # Remove installed binary
 - All user input is shell-escaped via `shellEscape()` (wraps in single quotes, escapes internal quotes)
 - API key storage is opt-in via "Remember key" checkbox
 - In API mode, existing credentials are backed up and restored via a trap on EXIT
+- Attribution header fix option for local LLMs (adds `CLAUDE_CODE_ATTRIBUTION_HEADER=0` to `~/.claude/settings.json`)
 
 ### Profile Management
 
@@ -73,6 +75,7 @@ sudo make -C build uninstall # Remove installed binary
 - `apiProfile_<name>_opusModelCheck/Model` - Opus model override
 - `apiProfile_<name>_sonnetModelCheck/Model` - Sonnet model override
 - `apiProfile_<name>_haikuModelCheck/Model` - Haiku model override
+- `apiProfile_<name>_fixAttribution` - Attribution header fix enabled
 - `activeProfile` - Currently active profile name
 
 **UI Components**:
