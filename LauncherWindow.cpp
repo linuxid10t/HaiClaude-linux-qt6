@@ -639,22 +639,26 @@ void LauncherWindow::saveCurrentProfile()
     QSettings s;
     QStringList profiles = s.value("apiProfiles").toStringList();
 
-    // Prefer selected profile from combo box, fall back to name field
-    QString profileName = fProfileComboBox->currentText();
-    bool isUpdate = !profileName.isEmpty() && profiles.contains(profileName);
+    // Check name field first for new profiles
+    QString profileName = fProfileNameEdit->text().trimmed();
+    bool isUpdate = false;
 
-    if (!isUpdate) {
-        profileName = fProfileNameEdit->text().trimmed();
-        if (profileName.isEmpty()) {
-            QMessageBox::warning(this, "Invalid Profile Name",
-                "Please select a profile to update or enter a new profile name.");
-            return;
-        }
+    if (!profileName.isEmpty()) {
+        // User entered a name - check for duplicate
         if (profiles.contains(profileName)) {
             QMessageBox::warning(this, "Duplicate Profile",
                 "A profile with this name already exists.");
             return;
         }
+    } else {
+        // No name entered - use selected profile from combo box (update existing)
+        profileName = fProfileComboBox->currentText();
+        if (profileName.isEmpty() || !profiles.contains(profileName)) {
+            QMessageBox::warning(this, "Invalid Profile Name",
+                "Please enter a new profile name or select an existing profile to update.");
+            return;
+        }
+        isUpdate = true;
     }
 
     // Save profile settings
