@@ -266,6 +266,15 @@ LauncherWindow::LauncherWindow(QWidget* parent)
         fDeleteProfileButton->setEnabled(fProfileListWidget->currentItem() != nullptr);
     });
 
+    connect(fProfileListWidget, &QListWidget::itemDoubleClicked,
+            this, [this](QListWidgetItem* item) {
+        if (item) {
+            int idx = fProfileComboBox->findText(item->text());
+            if (idx >= 0)
+                fProfileComboBox->setCurrentIndex(idx);
+        }
+    });
+
     connect(fSaveProfileButton, &QPushButton::clicked, this, &LauncherWindow::saveCurrentProfile);
     connect(fDeleteProfileButton, &QPushButton::clicked, this, &LauncherWindow::deleteProfile);
 
