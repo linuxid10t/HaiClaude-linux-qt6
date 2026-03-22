@@ -686,12 +686,10 @@ void LauncherWindow::saveCurrentProfile()
     updateProfileListWidget();
     fProfileNameEdit->clear();
 
-    // Restore selection if updating
-    if (isUpdate) {
-        int idx = fProfileComboBox->findText(profileName);
-        if (idx >= 0)
-            fProfileComboBox->setCurrentIndex(idx);
-    }
+    // Select the saved/updated profile in combo box
+    int idx = fProfileComboBox->findText(profileName);
+    if (idx >= 0)
+        fProfileComboBox->setCurrentIndex(idx);
 
     QMessageBox::information(this, "Profile Saved",
         isUpdate ? "Profile '" + profileName + "' has been updated."
