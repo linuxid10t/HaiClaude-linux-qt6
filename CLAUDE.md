@@ -87,8 +87,8 @@ sudo make -C build uninstall # Remove installed binary
 
 **User Flow**:
 1. Enter API settings in the UI
-2. Type a profile name in the profile name input field
-3. Click "Save Profile" to save current settings
+2. To create new: type a profile name in the profile name input field, then click "Save Profile"
+3. To update existing: select a profile from the combo box, modify settings, then click "Save Profile"
 4. Profile appears in both the combo box and list widget
 5. Select a profile from the combo box to load its settings
 6. Select a profile from the list widget and click "Delete" to remove it

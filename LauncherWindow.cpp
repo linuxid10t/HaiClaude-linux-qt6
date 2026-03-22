@@ -636,21 +636,25 @@ void LauncherWindow::updateProfileListWidget()
 
 void LauncherWindow::saveCurrentProfile()
 {
-    QString profileName = fProfileNameEdit->text().trimmed();
-
-    if (profileName.isEmpty()) {
-        QMessageBox::warning(this, "Invalid Profile Name",
-            "Please enter a profile name.");
-        return;
-    }
-
-    // Check for duplicate profile names
     QSettings s;
     QStringList profiles = s.value("apiProfiles").toStringList();
-    if (profiles.contains(profileName)) {
-        QMessageBox::warning(this, "Duplicate Profile",
-            "A profile with this name already exists.");
-        return;
+
+    // Prefer selected profile from combo box, fall back to name field
+    QString profileName = fProfileComboBox->currentText();
+    bool isUpdate = !profileName.isEmpty() && profiles.contains(profileName);
+
+    if (!isUpdate) {
+        profileName = fProfileNameEdit->text().trimmed();
+        if (profileName.isEmpty()) {
+            QMessageBox::warning(this, "Invalid Profile Name",
+                "Please select a profile to update or enter a new profile name.");
+            return;
+        }
+        if (profiles.contains(profileName)) {
+            QMessageBox::warning(this, "Duplicate Profile",
+                "A profile with this name already exists.");
+            return;
+        }
     }
 
     // Save profile settings
@@ -667,17 +671,27 @@ void LauncherWindow::saveCurrentProfile()
     s.setValue("apiProfile_" + profileName + "_haikuModel", fApiHaikuModelField->text());
     s.setValue("apiProfile_" + profileName + "_fixAttribution", fFixAttributionCheck->isChecked());
 
-    // Add to profiles list
-    profiles.append(profileName);
-    s.setValue("apiProfiles", profiles);
+    // Add to profiles list only if new
+    if (!isUpdate) {
+        profiles.append(profileName);
+        s.setValue("apiProfiles", profiles);
+    }
 
     // Update UI
     updateProfileComboBox();
     updateProfileListWidget();
     fProfileNameEdit->clear();
 
+    // Restore selection if updating
+    if (isUpdate) {
+        int idx = fProfileComboBox->findText(profileName);
+        if (idx >= 0)
+            fProfileComboBox->setCurrentIndex(idx);
+    }
+
     QMessageBox::information(this, "Profile Saved",
-        "Profile '" + profileName + "' has been saved.");
+        isUpdate ? "Profile '" + profileName + "' has been updated."
+                 : "Profile '" + profileName + "' has been saved.");
 }
 
 void LauncherWindow::deleteProfile()
