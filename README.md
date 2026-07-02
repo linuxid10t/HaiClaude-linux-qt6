@@ -11,6 +11,7 @@ Native Qt6 GUI launcher for [Claude Code](https://docs.anthropic.com/en/docs/cla
   - **API Key** — your Anthropic API key (input is masked)
   - **Model overrides** — optionally override the default Opus, Sonnet, and Haiku model versions
   - **Current model override** — force a specific model via `--model`
+  - **Custom environment variables** — add arbitrary `KEY=value` variables (one per line) to the launched process; values are shell-escaped, `#` lines are ignored
 - **Working directory** picker — persistent text field with a **Browse…** button; Claude Code starts in the chosen directory
 - **Persistent settings** — all settings (mode, model, directory, API configuration) are saved across sessions; defaults to Cloud mode on first run
 - **Security** — shell injection protection, opt-in API key storage, input validation, and safe credentials handling

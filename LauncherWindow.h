@@ -12,6 +12,7 @@ class QLineEdit;
 class QListWidget;
 class QPushButton;
 class QRadioButton;
+class QTextEdit;
 
 extern std::string gPendingExec;
 
@@ -66,6 +67,8 @@ private:
     QLineEdit*      fApiSonnetModelField;
     QCheckBox*      fApiHaikuModelCheck;
     QLineEdit*      fApiHaikuModelField;
+    QCheckBox*      fCustomEnvVarsCheck;
+    QTextEdit*      fCustomEnvVarsField;
     QCheckBox*      fFixAttributionCheck;
     QCheckBox*      fYoloCheck;
 

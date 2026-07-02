@@ -25,6 +25,7 @@
 #include <QScreen>
 #include <QSettings>
 #include <QStandardPaths>
+#include <QTextEdit>
 #include <QVBoxLayout>
 
 #include <unistd.h>
@@ -111,6 +112,14 @@ LauncherWindow::LauncherWindow(QWidget* parent)
                    fApiSonnetModelCheck,  fApiSonnetModelField);
     addOverrideRow("Override ANTHROPIC_DEFAULT_HAIKU_MODEL",  "claude-haiku-4-20250514",
                    fApiHaikuModelCheck,   fApiHaikuModelField);
+
+    // Custom environment variables
+    fCustomEnvVarsCheck = new QCheckBox("Custom Environment Variables");
+    fCustomEnvVarsField = new QTextEdit;
+    fCustomEnvVarsField->setVisible(false);
+    fCustomEnvVarsField->setPlaceholderText("CLAUDE_STREAM_IDLE_TIMEOUT_MS=30000\nANTHROPIC_BASE_URL_FALLBACK=https://example.com");
+    apiLayout->addRow(fCustomEnvVarsCheck);
+    apiLayout->addRow(fCustomEnvVarsField);
 
     fFixAttributionCheck = new QCheckBox("Fix attribution header (for local LLMs)");
     fFixAttributionCheck->setToolTip("Disables CLAUDE_CODE_ATTRIBUTION_HEADER in settings.json.\n"
@@ -254,6 +263,12 @@ LauncherWindow::LauncherWindow(QWidget* parent)
     connectCheck(fApiSonnetModelCheck,  fApiSonnetModelField);
     connectCheck(fApiHaikuModelCheck,   fApiHaikuModelField);
 
+    // Connect custom environment variables checkbox
+    connect(fCustomEnvVarsCheck, &QCheckBox::toggled, this, [this](bool checked) {
+        fCustomEnvVarsField->setVisible(checked);
+        resizeToFit();
+    });
+
     // Profile management connections
     connect(fProfileComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, [this](int index) {
@@ -358,6 +373,28 @@ QString LauncherWindow::buildCommand() const
         addEnv(fApiOpusModelCheck,   fApiOpusModelField,   "ANTHROPIC_DEFAULT_OPUS_MODEL");
         addEnv(fApiSonnetModelCheck, fApiSonnetModelField, "ANTHROPIC_DEFAULT_SONNET_MODEL");
         addEnv(fApiHaikuModelCheck,  fApiHaikuModelField,  "ANTHROPIC_DEFAULT_HAIKU_MODEL");
+
+        // Add custom environment variables
+        if (fCustomEnvVarsCheck->isChecked()) {
+            QString content = fCustomEnvVarsField->toPlainText();
+            QStringList lines = content.split('\n');
+            for (const QString& line : lines) {
+                QString trimmed = line.trimmed();
+                if (!trimmed.isEmpty() && !trimmed.startsWith('#')) {
+                    cmd += " ";
+                    // Parse key=value
+                    int eqPos = trimmed.indexOf('=');
+                    if (eqPos > 0) {
+                        QString key = trimmed.left(eqPos).trimmed();
+                        QString value = trimmed.mid(eqPos + 1).trimmed();
+                        cmd += key + "=" + shellEscape(value);
+                    } else {
+                        // Handle as variable name only (value will be empty)
+                        cmd += trimmed;
+                    }
+                }
+            }
+        }
 
         cmd += " " + claudeBin;
 
@@ -536,6 +573,9 @@ void LauncherWindow::loadSettings()
             loadCheck("apiHaikuModelCheck",   fApiHaikuModelCheck,
                       "apiHaikuModel",   "claude-haiku-4-20250514", fApiHaikuModelField);
 
+            fCustomEnvVarsCheck->setChecked(s.value("customEnvVarsCheck", false).toBool());
+            fCustomEnvVarsField->setVisible(fCustomEnvVarsCheck->isChecked());
+            fCustomEnvVarsField->setPlainText(s.value("customEnvVarsContent", "").toString());
             fFixAttributionCheck->setChecked(s.value("fixAttributionHeader", false).toBool());
             fYoloCheck->setChecked(s.value("yoloMode", false).toBool());
         }
@@ -565,6 +605,9 @@ void LauncherWindow::loadSettings()
         loadCheck("apiHaikuModelCheck",   fApiHaikuModelCheck,
                   "apiHaikuModel",   "claude-haiku-4-20250514", fApiHaikuModelField);
 
+        fCustomEnvVarsCheck->setChecked(s.value("customEnvVarsCheck", false).toBool());
+        fCustomEnvVarsField->setVisible(fCustomEnvVarsCheck->isChecked());
+        fCustomEnvVarsField->setPlainText(s.value("customEnvVarsContent", "").toString());
         fFixAttributionCheck->setChecked(s.value("fixAttributionHeader", false).toBool());
         fYoloCheck->setChecked(s.value("yoloMode", false).toBool());
     }
@@ -583,8 +626,23 @@ void LauncherWindow::saveSettings()
     // Save active profile if in API mode
     if (fApiRadio->isChecked()) {
         QString profileName = fProfileComboBox->currentText();
-        if (!profileName.isEmpty())
+        if (!profileName.isEmpty()) {
             s.setValue("activeProfile", profileName);
+
+            // Also save current settings to the active profile
+            s.setValue("apiProfile_" + profileName + "_url", fApiUrlField->text());
+            s.setValue("apiProfile_" + profileName + "_key", fApiKeyField->text());
+            s.setValue("apiProfile_" + profileName + "_saveKey", fSaveApiKeyCheck->isChecked());
+            s.setValue("apiProfile_" + profileName + "_currentModelCheck", fApiCurrentModelCheck->isChecked());
+            s.setValue("apiProfile_" + profileName + "_currentModel", fApiCurrentModelField->text());
+            s.setValue("apiProfile_" + profileName + "_opusModelCheck", fApiOpusModelCheck->isChecked());
+            s.setValue("apiProfile_" + profileName + "_opusModel", fApiOpusModelField->text());
+            s.setValue("apiProfile_" + profileName + "_sonnetModelCheck", fApiSonnetModelCheck->isChecked());
+            s.setValue("apiProfile_" + profileName + "_sonnetModel", fApiSonnetModelField->text());
+            s.setValue("apiProfile_" + profileName + "_haikuModelCheck", fApiHaikuModelCheck->isChecked());
+            s.setValue("apiProfile_" + profileName + "_haikuModel", fApiHaikuModelField->text());
+            s.setValue("apiProfile_" + profileName + "_fixAttribution", fFixAttributionCheck->isChecked());
+        }
     }
 
     s.setValue("apiUrl",   fApiUrlField->text());
@@ -602,6 +660,8 @@ void LauncherWindow::saveSettings()
     s.setValue("apiSonnetModel",       fApiSonnetModelField->text());
     s.setValue("apiHaikuModelCheck",   fApiHaikuModelCheck->isChecked());
     s.setValue("apiHaikuModel",        fApiHaikuModelField->text());
+    s.setValue("customEnvVarsCheck",  fCustomEnvVarsCheck->isChecked());
+    s.setValue("customEnvVarsContent", fCustomEnvVarsField->toPlainText());
     s.setValue("fixAttributionHeader", fFixAttributionCheck->isChecked());
     s.setValue("yoloMode",             fYoloCheck->isChecked());
 }
@@ -682,6 +742,8 @@ void LauncherWindow::saveCurrentProfile()
     s.setValue("apiProfile_" + profileName + "_sonnetModel", fApiSonnetModelField->text());
     s.setValue("apiProfile_" + profileName + "_haikuModelCheck", fApiHaikuModelCheck->isChecked());
     s.setValue("apiProfile_" + profileName + "_haikuModel", fApiHaikuModelField->text());
+    s.setValue("apiProfile_" + profileName + "_customEnvVarsCheck", fCustomEnvVarsCheck->isChecked());
+    s.setValue("apiProfile_" + profileName + "_customEnvVarsContent", fCustomEnvVarsField->toPlainText());
     s.setValue("apiProfile_" + profileName + "_fixAttribution", fFixAttributionCheck->isChecked());
 
     // Add to profiles list only if new
@@ -734,6 +796,8 @@ void LauncherWindow::deleteProfile()
     s.remove("apiProfile_" + profileName + "_sonnetModel");
     s.remove("apiProfile_" + profileName + "_haikuModelCheck");
     s.remove("apiProfile_" + profileName + "_haikuModel");
+    s.remove("apiProfile_" + profileName + "_customEnvVarsCheck");
+    s.remove("apiProfile_" + profileName + "_customEnvVarsContent");
     s.remove("apiProfile_" + profileName + "_fixAttribution");
 
     // Update UI
@@ -765,6 +829,8 @@ void LauncherWindow::loadProfile(const QString& name)
     fApiHaikuModelCheck->setChecked(s.value("apiProfile_" + name + "_haikuModelCheck", false).toBool());
     fApiHaikuModelField->setText(s.value("apiProfile_" + name + "_haikuModel", "claude-haiku-4-20250514").toString());
 
+    fCustomEnvVarsCheck->setChecked(s.value("apiProfile_" + name + "_customEnvVarsCheck", false).toBool());
+    fCustomEnvVarsField->setPlainText(s.value("apiProfile_" + name + "_customEnvVarsContent", "").toString());
     fFixAttributionCheck->setChecked(s.value("apiProfile_" + name + "_fixAttribution", false).toBool());
 
     // Update visibility
@@ -772,6 +838,7 @@ void LauncherWindow::loadProfile(const QString& name)
     fApiOpusModelField->setVisible(fApiOpusModelCheck->isChecked());
     fApiSonnetModelField->setVisible(fApiSonnetModelCheck->isChecked());
     fApiHaikuModelField->setVisible(fApiHaikuModelCheck->isChecked());
+    fCustomEnvVarsField->setVisible(fCustomEnvVarsCheck->isChecked());
 
     resizeToFit();
 }

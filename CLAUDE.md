@@ -38,6 +38,7 @@ sudo make -C build uninstall # Remove installed binary
 - Working directory picker
 - YOLO mode checkbox (skip all permissions) - visible in both modes
 - API settings (URL, key, model overrides) - only visible in API mode
+- Custom environment variables (multi-line `KEY=value` editor) - only visible in API mode
 - Profile management (save/load API configurations) - only visible in API mode
 - Settings persistence via `QSettings` (stored under `DavidMasson/HaiClaude`)
 - Terminal detection and command execution
@@ -63,7 +64,8 @@ sudo make -C build uninstall # Remove installed binary
 
 **How it works**:
 - Profiles are stored in QSettings under the `DavidMasson/HaiClaude` organization
-- Each profile stores: URL, API key, "Remember key" preference, and all model override settings
+- Each profile stores: URL, API key, "Remember key" preference, all model override settings, and custom environment variables
+- The active profile is also re-saved on every Launch: `saveSettings()` writes the current UI state back into the active profile's keys, so manual edits are captured even without clicking "Save Profile"
 - Profile names are validated (no empty names, no special characters that break INI keys)
 
 **Profile keys**:
@@ -75,6 +77,7 @@ sudo make -C build uninstall # Remove installed binary
 - `apiProfile_<name>_opusModelCheck/Model` - Opus model override
 - `apiProfile_<name>_sonnetModelCheck/Model` - Sonnet model override
 - `apiProfile_<name>_haikuModelCheck/Model` - Haiku model override
+- `apiProfile_<name>_customEnvVarsCheck/Content` - Custom environment variables (`KEY=value`, one per line)
 - `apiProfile_<name>_fixAttribution` - Attribution header fix enabled
 - `activeProfile` - Currently active profile name
 
@@ -93,6 +96,22 @@ sudo make -C build uninstall # Remove installed binary
 5. Select a profile from the combo box to load its settings
 6. Select a profile from the list widget and click "Delete" to remove it
 7. Active profile is saved and restored on app restart
+
+### Custom Environment Variables
+
+**Feature**: Add arbitrary `KEY=value` environment variables to the launched Claude Code process (API mode only).
+
+**UI**:
+- `fCustomEnvVarsCheck` (QCheckBox) - toggles the feature and shows/hides the editor
+- `fCustomEnvVarsField` (QTextEdit) - multi-line editor with a `KEY=value` placeholder
+
+**How it works** (`buildCommand()`):
+- Each non-empty, non-`#`-comment line is split on the first `=`
+- The value is shell-escaped via `shellEscape()`; the key is used verbatim
+- Lines with no `=` are emitted bare (variable name only)
+- Lines are appended directly to the shell command as `KEY='value'`, before the `claude` binary
+
+**Persistence**: `customEnvVarsCheck` and `customEnvVarsContent` are saved/loaded both globally and per-profile.
 
 ## Conventions
 
