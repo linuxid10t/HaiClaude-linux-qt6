@@ -74,7 +74,12 @@ mv "$APPDIR/usr/bin/haiclaude" "$APPDIR/usr/bin/haiclaude.bin"
 cat > "$APPDIR/usr/bin/haiclaude" << 'WRAPPER'
 #!/bin/bash
 # Wrapper with theme support
-APPDIR="$(dirname "$(dirname "$(readlink -f "$0")")")"
+# AppRun is a symlink to usr/bin/haiclaude, so readlink -f "$0" resolves to
+# <mount>/usr/bin/haiclaude. Climbing bin -> usr -> mount-root needs THREE
+# dirnames; the AppImage runtime also exports APPDIR=<mount> directly.
+if [ -z "$APPDIR" ]; then
+    APPDIR="$(dirname "$(dirname "$(dirname "$(readlink -f "$0")")")")"
+fi
 export QT_PLUGIN_PATH="$APPDIR/usr/plugins:$QT_PLUGIN_PATH"
 
 # Auto-detect platform theme if not set
